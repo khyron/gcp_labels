@@ -1,0 +1,27 @@
+# Replace with your project ID, dataset ID, and desired labels (key1:value1,key2:value2)
+project_id = "your-project-id"
+dataset_id = "your-dataset-id"
+labels = {"key1": "value1", "key2": "value2"}
+
+# Import libraries
+from googleapiclient.discovery import build
+
+def update_dataset_labels(project_id, dataset_id, labels):
+  # Discover BigQuery API
+  service = build('bigquery', 'v2')
+
+  # Build the request
+  request = service.datasets().patch(
+      projectId=project_id,
+      datasetId=dataset_id,
+      body={"labels": labels}
+  )
+
+  # Execute the request
+  request.execute()
+  print(f"Labels added to dataset: {dataset_id}")
+
+# Update labels for the dataset
+update_dataset_labels(project_id, dataset_id, labels.copy())
+
+print(f"Labels update completed for dataset: {dataset_id}")
