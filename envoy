@@ -1,0 +1,30 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: extract-last-ip
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway  # Match your gateway workload
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.lua
+        config:
+          inlineCode: |
+            function envoy_on_request(request_handle)
+              local x_forwarded_for = request_handle:headers():get("x-forwarded-for")
+              if x_forwarded_for ~= nil then
+                local last_ip = x_forwarded_for:match(".*,(%s*[^,]+)$") or x_forwarded_for
+                request_handle:headers():replace("x-last-forwarded-ip", last_ip)
+              end
+            end
