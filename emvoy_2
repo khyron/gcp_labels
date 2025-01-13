@@ -1,0 +1,28 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: extract-last-ip
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.header_to_metadata
+        config:
+          request_rules:
+          - header: x-forwarded-for
+            on_header_present:
+              key: last_ip
+              value: "%DYNAMIC_METADATA(x-forwarded-for:last_ip)%"
+            remove: false
