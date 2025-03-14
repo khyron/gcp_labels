@@ -1,0 +1,66 @@
+---
+- name: Download all files from an SFTP folder and maintain directory structure
+  hosts: localhost
+  gather_facts: no
+  vars:
+    sftp_host: "your.sftp.server.com"  # SFTP server address
+    sftp_username: "your_username"     # SFTP username
+    sftp_password: "your_password"     # SFTP password (or use private_key for key-based auth)
+    sftp_remote_dir: "/path/to/remote/folder"  # Remote directory to download files from
+    local_download_dir: "/path/to/local/folder"  # Local directory to save files
+
+  tasks:
+    - name: Ensure local download directory exists
+      ansible.builtin.file:
+        path: "{{ local_download_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: List all files and directories in the remote SFTP directory (recursively)
+      ansible.builtin.shell: |
+        sftp -oBatchMode=no -b - {{ sftp_username }}@{{ sftp_host }} <<EOF
+        cd {{ sftp_remote_dir }}
+        ls -R
+        EOF
+      environment:
+        SFTP_PASSWORD: "{{ sftp_password }}"
+      register: sftp_list
+      changed_when: false  # This task does not change the system
+
+    - name: Parse the list of files and directories
+      ansible.builtin.set_fact:
+        sftp_files: "{{ sftp_list.stdout_lines | select('match', '^[^:]+$') | list }}"
+      when: sftp_list is succeeded
+
+    - name: Create local directories to mirror the remote structure
+      ansible.builtin.file:
+        path: "{{ local_download_dir }}/{{ item | regex_replace('^' + sftp_remote_dir, '') }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ sftp_files }}"
+      when: >
+        item is match('.*/$')  # Only create directories (directories end with '/')
+
+    - name: Download all files from the SFTP folder (maintaining structure)
+      ansible.builtin.shell: |
+        sftp -oBatchMode=no -b - {{ sftp_username }}@{{ sftp_host }} <<EOF
+        cd {{ sftp_remote_dir }}
+        get -r {{ item }} {{ local_download_dir }}/
+        EOF
+      environment:
+        SFTP_PASSWORD: "{{ sftp_password }}"
+      loop: "{{ sftp_files }}"
+      when: >
+        item is not match('.*/$')  # Only download files (files do not end with '/')
+      register: downloaded_files
+
+    - name: Delete downloaded files from the SFTP server
+      ansible.builtin.shell: |
+        sftp -oBatchMode=no -b - {{ sftp_username }}@{{ sftp_host }} <<EOF
+        cd {{ sftp_remote_dir }}
+        rm {{ item.item }}
+        EOF
+      environment:
+        SFTP_PASSWORD: "{{ sftp_password }}"
+      loop: "{{ downloaded_files.results }}"
+      when: item is succeeded  # Only delete if download succeeded
