@@ -1,0 +1,37 @@
+---
+- name: Download all files recursively from a remote SFTP server and maintain structure
+  hosts: localhost
+  gather_facts: no
+  vars:
+    sftp_host: "sftp.example.com"
+    sftp_user: "your_username"
+    sftp_password: "your_password"
+    remote_dir: "/remote/path/"
+    local_dir: "/local/path/"
+  tasks:
+    - name: Ensure local directory exists
+      ansible.builtin.file:
+        path: "{{ local_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Download files recursively with .tmp extension
+      ansible.builtin.shell: |
+        sshpass -p '{{ sftp_password }}' lftp -e "
+        open sftp://{{ sftp_user }}:{{ sftp_password }}@{{ sftp_host }}
+        lcd {{ local_dir }}
+        mirror --parallel=5 --verbose --use-pget-n=5 --transfer-timeout=60 --continue --delete-first --loop --no-empty-dirs --no-perms --no-umask --temp-dir=.tmp {{ remote_dir }} .
+        bye" -c
+      args:
+        chdir: "{{ local_dir }}"
+
+    - name: Rename downloaded files by removing .tmp extension
+      ansible.builtin.shell: |
+        find {{ local_dir }} -type f -name "*.tmp" -exec bash -c 'mv "$0" "${0%.tmp}"' {} \;
+
+    - name: Delete remote files after successful download
+      ansible.builtin.shell: |
+        sshpass -p '{{ sftp_password }}' lftp -e "
+        open sftp://{{ sftp_user }}:{{ sftp_password }}@{{ sftp_host }}
+        mirror --reverse --delete --verbose --no-empty-dirs {{ local_dir }} {{ remote_dir }}
+        bye" -c
