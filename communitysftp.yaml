@@ -1,0 +1,57 @@
+---
+- name: Download all files from an SFTP folder and maintain directory structure
+  hosts: localhost
+  gather_facts: no
+  vars:
+    sftp_host: "your.sftp.server.com"  # SFTP server address
+    sftp_username: "your_username"     # SFTP username
+    sftp_password: "your_password"     # SFTP password (or use private_key for key-based auth)
+    sftp_remote_dir: "/path/to/remote/folder"  # Remote directory to download files from
+    local_download_dir: "/path/to/local/folder"  # Local directory to save files
+
+  tasks:
+    - name: Ensure local download directory exists
+      ansible.builtin.file:
+        path: "{{ local_download_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: List all files and directories in the remote SFTP directory (recursively)
+      community.general.sftp:
+        host: "{{ sftp_host }}"
+        username: "{{ sftp_username }}"
+        password: "{{ sftp_password }}"  # Use `private_key` instead of `password` for key-based auth
+        path: "{{ sftp_remote_dir }}"
+        operation: list
+        recurse: yes  # List files recursively to maintain directory structure
+      register: sftp_files
+
+    - name: Create local directories to mirror the remote structure
+      ansible.builtin.file:
+        path: "{{ local_download_dir }}/{{ item.path | regex_replace('^' + sftp_remote_dir, '') }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ sftp_files.files }}"
+      when: item.isdir  # Only create directories
+
+    - name: Download all files from the SFTP folder (maintaining structure)
+      community.general.sftp:
+        host: "{{ sftp_host }}"
+        username: "{{ sftp_username }}"
+        password: "{{ sftp_password }}"  # Use `private_key` instead of `password` for key-based auth
+        src: "{{ item.path }}"
+        dest: "{{ local_download_dir }}/{{ item.path | regex_replace('^' + sftp_remote_dir, '') }}"
+        operation: get
+      loop: "{{ sftp_files.files }}"
+      when: item.isreg  # Only download regular files (not directories)
+      register: downloaded_files
+
+    - name: Delete downloaded files from the SFTP server
+      community.general.sftp:
+        host: "{{ sftp_host }}"
+        username: "{{ sftp_username }}"
+        password: "{{ sftp_password }}"  # Use `private_key` instead of `password` for key-based auth
+        path: "{{ item.path }}"
+        operation: remove
+      loop: "{{ downloaded_files.results }}"
+      when: item is succeeded  # Only delete if download succeeded
