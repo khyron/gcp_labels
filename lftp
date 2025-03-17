@@ -8,6 +8,7 @@
     sftp_password: "your_password"
     remote_dir: "/remote/path/"
     local_dir: "/local/path/"
+    ssh_key_path: "/path/to/private/key"  # Path to your SSH private key
   tasks:
     - name: Ensure local directory exists
       ansible.builtin.file:
@@ -17,6 +18,9 @@
 
     - name: Download files recursively
       ansible.builtin.shell: |
+ #       lftp -e "
+ #       set sftp:connect-program 'ssh -i {{ ssh_key_path }} -o StrictHostKeyChecking=no';
+ #       open -u {{ sftp_user }}, sftp://{{ sftp_host }};
         sshpass -p '{{ sftp_password }}' lftp -c "
         open sftp://{{ sftp_user }}:{{ sftp_password }}@{{ sftp_host }}
         set xfer:use-temp-file yes
