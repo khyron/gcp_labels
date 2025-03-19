@@ -1,2 +1,206 @@
 sshpass -p "your_password" lftp -u luis, -e "set sftp:connect-program 'ssh -a -x -i ./key.pem'; open sftp://axwayserver.test"
 lftp -u luis, -e "set sftp:connect-program 'ssh -a -x -i ./key.pem -o PubkeyAuthentication=yes -o PasswordAuthentication=yes'; open sftp://axwayserver.test"
+
+
+1. rsync with SSH
+rsync is a powerful tool for file synchronization and supports SSH for secure transfers. It can use PEM keys and passwords for authentication.
+
+Steps to Use rsync:
+Convert the PEM key to OpenSSH format (if needed):
+
+bash
+Copy
+ssh-keygen -p -m PEM -f ./key.pem
+Use rsync with the PEM key:
+
+bash
+Copy
+rsync -avz -e "ssh -i ./key.pem" luis@axwayserver.test:/remote/directory/ /local/directory/
+-avz: Archive mode, verbose, and compression.
+
+-e "ssh -i ./key.pem": Specifies the SSH command with the PEM key.
+
+/remote/directory/: The directory on the SFTP server.
+
+/local/directory/: The local directory to sync to.
+
+Mirroring with rsync:
+To mirror (delete files in the destination that are not in the source), add the --delete flag:
+
+bash
+Copy
+rsync -avz --delete -e "ssh -i ./key.pem" luis@axwayserver.test:/remote/directory/ /local/directory/
+Password Authentication:
+If the server requires a password, rsync will prompt for it. To automate this, use sshpass:
+
+bash
+Copy
+sshpass -p "your_password" rsync -avz --delete -e "ssh -i ./key.pem" luis@axwayserver.test:/remote/directory/ /local/directory/
+2. rclone
+rclone is a command-line tool for syncing files and directories to and from various cloud storage providers and remote servers. It supports SFTP and can handle PEM keys.
+
+Steps to Use rclone:
+Install rclone:
+
+On Linux:
+
+bash
+Copy
+curl https://rclone.org/install.sh | sudo bash
+On macOS (with Homebrew):
+
+bash
+Copy
+brew install rclone
+Configure rclone for SFTP:
+Run the following command to set up a new SFTP remote:
+
+bash
+Copy
+rclone config
+Choose n for a new remote.
+
+Enter a name for the remote (e.g., axway).
+
+Choose sftp as the storage type.
+
+Provide the hostname (axwayserver.test), username (luis), and PEM key path (./key.pem).
+
+Leave other settings as default.
+
+Mirror with rclone:
+Use the rclone sync command to mirror files:
+
+bash
+Copy
+rclone sync axway:/remote/directory/ /local/directory/
+sync: Syncs the source to the destination, deleting files in the destination that are not in the source.
+
+axway:/remote/directory/: The remote directory on the SFTP server.
+
+/local/directory/: The local directory to sync to.
+
+Password Authentication:
+If the server requires a password, rclone will prompt for it during the configuration step.
+
+3. scp with Scripting
+scp can be used for file transfers with PEM keys and passwords. While it doesn’t natively support mirroring, you can script it to achieve similar functionality.
+
+Example Script:
+bash
+Copy
+#!/bin/bash
+
+# Variables
+REMOTE_USER="luis"
+REMOTE_HOST="axwayserver.test"
+REMOTE_DIR="/remote/directory/"
+LOCAL_DIR="/local/directory/"
+KEY_FILE="./key.pem"
+
+# Sync files
+scp -i "$KEY_FILE" -r "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR" "$LOCAL_DIR"
+
+# Optional: Delete files in local directory that are not in remote directory
+rsync -avz --delete -e "ssh -i $KEY_FILE" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR" "$LOCAL_DIR"
+Use sshpass to automate password input if needed:
+
+bash
+Copy
+sshpass -p "your_password" scp -i "$KEY_FILE" -r "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR" "$LOCAL_DIR"
+4. FileZilla (GUI)
+If you prefer a graphical interface, FileZilla is a popular SFTP client that supports PEM keys and password authentication.
+
+Steps to Use FileZilla:
+Install FileZilla:
+
+Download from https://filezilla-project.org/.
+
+Convert PEM Key to PPK:
+FileZilla uses PuTTY's .ppk format for keys. Convert your PEM key to PPK using puttygen:
+
+Install puttygen:
+
+bash
+Copy
+sudo apt-get install putty-tools  # On Debian/Ubuntu
+Convert the key:
+
+bash
+Copy
+puttygen ./key.pem -o ./key.ppk
+Configure FileZilla:
+
+Open FileZilla and go to File > Site Manager.
+
+Add a new site:
+
+Protocol: SFTP.
+
+Host: axwayserver.test.
+
+Logon Type: Key file.
+
+User: luis.
+
+Key file: Browse to the .ppk file you created.
+
+Save the configuration.
+
+Mirroring:
+
+Use the Site Manager to connect to the server.
+
+Use the Synchronized Browsing feature to mirror directories.
+
+5. Python with paramiko
+If you’re comfortable with scripting, you can use Python with the paramiko library to create a custom SFTP client that supports PEM keys and mirroring.
+
+Example Script:
+python
+Copy
+import paramiko
+import os
+
+# Variables
+hostname = "axwayserver.test"
+port = 22
+username = "luis"
+password = "your_password"
+key_file = "./key.pem"
+remote_dir = "/remote/directory/"
+local_dir = "/local/directory/"
+
+# Load PEM key
+key = paramiko.RSAKey.from_private_key_file(key_file)
+
+# Connect to the server
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect(hostname, port, username, pkey=key, password=password)
+
+# SFTP client
+sftp = ssh.open_sftp()
+
+# Mirroring
+for filename in sftp.listdir(remote_dir):
+    remote_path = remote_dir + filename
+    local_path = os.path.join(local_dir, filename)
+    sftp.get(remote_path, local_path)
+
+# Close connection
+sftp.close()
+ssh.close()
+Install paramiko:
+
+bash
+Copy
+pip install paramiko
+Summary of Alternatives
+Tool	PEM Key Support	Password Support	Mirroring	Notes
+rsync	Yes	Yes	Yes	Requires SSH, supports sync.
+rclone	Yes	Yes	Yes	Easy to configure, supports SFTP.
+scp	Yes	Yes	No	Can be scripted for mirroring.
+FileZilla	Yes (via PPK)	Yes	Yes	GUI-based, user-friendly.
+Python	Yes	Yes	Yes	Fully customizable.
+Let me know if you need further assistance with any of these tools!
