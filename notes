@@ -1,1 +1,2 @@
 sshpass -p "your_password" lftp -u luis, -e "set sftp:connect-program 'ssh -a -x -i ./key.pem'; open sftp://axwayserver.test"
+lftp -u luis, -e "set sftp:connect-program 'ssh -a -x -i ./key.pem -o PubkeyAuthentication=yes -o PasswordAuthentication=yes'; open sftp://axwayserver.test"
