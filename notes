@@ -204,3 +204,24 @@ scp	Yes	Yes	No	Can be scripted for mirroring.
 FileZilla	Yes (via PPK)	Yes	Yes	GUI-based, user-friendly.
 Python	Yes	Yes	Yes	Fully customizable.
 Let me know if you need further assistance with any of these tools!
+
+
+#!/bin/bash
+
+# Variables
+USERNAME="luis"
+HOSTNAME="axwayserver.test"
+KEY_FILE="./key.pem"
+REMOTE_DIR="/remote/directory/"
+LOCAL_DIR="/local/directory/"
+LOG_FILE="lftp.log"
+
+# Run lftp and log output
+lftp -u "$USERNAME," -e "set sftp:connect-program 'ssh -a -x -i $KEY_FILE'; mirror --delete $REMOTE_DIR $LOCAL_DIR; quit" sftp://$HOSTNAME > "$LOG_FILE" 2>&1
+
+# Check if lftp succeeded
+if [ $? -eq 0 ]; then
+  echo "Mirroring completed successfully. Log saved to $LOG_FILE."
+else
+  echo "Mirroring failed. Check $LOG_FILE for details."
+fi
